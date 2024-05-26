@@ -1,0 +1,15 @@
+{
+  "name": "youtubebeckend",
+  "version": "1.0.0",
+  "description": "a beckend by DD",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "javascript",
+    "beckend"
+  ],
+  "author": "Divyansh Dubey",
+  "license": "ISC"
+}
