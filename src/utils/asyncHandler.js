@@ -11,12 +11,15 @@
 // }
 // with try catch
 
-// with promise
-const asyncHandler =(requestHandler)=>{
-   return (req,res,next)=>{
-    Promise.resolve(requestHandler(req,res,next)).catch((err)=>next(err))
+
+
+
+// Function to handle asynchronous request handlers with promises
+const asyncHandler = (requestHandler) => {
+  return (req, res, next) => {
+    Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err))
   }
 }
 
-
-export {asyncHandler}
+// Export asyncHandler function
+export { asyncHandler }
