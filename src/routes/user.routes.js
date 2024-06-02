@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { loginUser, logoutUser, registerUser,refreshAccessToken } from "../controllers/user.controller.js";
+import { loginUser, logoutUser, registerUser,refreshAccessToken,changeCurrentPassword,updateAccountDetails,updateUserAvatar,
+updateUserCoverImage,getCurrentUser } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -31,5 +32,16 @@ router.route("/login").post(loginUser)
 router.route("/logout").post(verifyJWT, logoutUser)
 
 router.route("/refresh-token").post(refreshAccessToken)
+
+router.route("/changeCurrentPassword").post(changeCurrentPassword)
+
+router.route("/updateAccountDetails").post(updateAccountDetails)
+
+router.route("/updateUserAvatar").post(updateUserAvatar)
+
+router.route("/updateUserCoverImage").post(updateUserCoverImage)
+
+router.route("/getCurrentUser").post(getCurrentUser)
+
 // Export the router to be used in the main app
 export default router;

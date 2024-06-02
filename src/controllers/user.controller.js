@@ -1,7 +1,7 @@
 import { apiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary,deleteFromCloudinary } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken"
 import { response } from "express";
@@ -229,8 +229,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     // If any error occurs, throw an unauthorized error
     throw new apiError(401, "Invalid refresh tokens");
   }
-});
-const changeCurrentPassword = asyncHandler(async (req, res) => {
+});const changeCurrentPassword = asyncHandler(async (req, res) => {
   // Extract old password, new password, and confirm password from the request body
   const { oldPassword, newPassword, conformPassword } = req.body;
 
@@ -241,6 +240,10 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
   // Find the user by the ID from the request's user object
   const user = await User.findById(req.user?._id);
+
+  if (!user) {
+    throw new apiError(404, "User not found");
+  }
 
   // Check if the provided old password is correct
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
@@ -258,11 +261,26 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     .json(new apiResponse(200, {}, "Password changed successfully"));
 });
 const getCurrentUser = asyncHandler(async (req, res) => {
-  // Send the current user information in the response
-  return res
-    .status(200)
-    .json(new apiResponse(200, res.user, "Current user fetched successfully"));
+  try {
+    // Get the current user's ID from the request object
+    const userId = req.user?._id;
+
+    // Fetch the user data from the database using the user ID
+    const user = await User.findById(userId).select("-password -refreshToken");
+
+    // Check if the user exists
+    if (!user) {
+      throw new apiError(404, "User not found");
+    }
+
+    // Send the user information in the response
+    return res.status(200).json(new apiResponse(200, user, "Current user fetched successfully"));
+  } catch (error) {
+    // Handle errors and send appropriate response
+    return res.status(error.status || 500).json(new apiResponse(error.status || 500, null, error.message));
+  }
 });
+
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
   // Extract fullname and email from the request body
@@ -298,6 +316,17 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   if (!avatarLocalPath) {
     throw new apiError(400, "Avatar file is missing");
   }
+  
+  
+    // Get the current user
+    const currentUser = await User.findById(req.user._id);
+
+    // If the current user has a previous avatar, delete it from Cloudinary
+    if (currentUser.avatar) {
+      const publicId = currentUser.avatar.split('/').pop().split('.')[0]; // Extract the public ID from the avatar URL
+      await deleteFromCloudinary(publicId);
+    }
+
 
   // Upload the avatar to Cloudinary
   const avatar = await uploadOnCloudinary(avatarLocalPath);
@@ -329,6 +358,17 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     throw new apiError(400, "Cover image file is missing");
   }
 
+
+    // Get the current user
+    const currentUser = await User.findById(req.user._id);
+
+    // If the current user has a previous coverimage , delete it from Cloudinary
+    if (currentUser.coverimage) {
+      const publicId = currentUser.coverimage.split('/').pop().split('.')[0]; // Extract the public ID from the avatar URL
+      await deleteFromCloudinary(publicId);
+    }
+
+
   // Upload the cover image to Cloudinary
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
@@ -349,6 +389,138 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .status(200)
     .json(new apiResponse(200, user, "Cover image updated successfully"));
 });
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  // Extract username from URL parameters
+  const { username } = req.params;
+
+  // Check if username is provided and trim whitespace
+  if (!username?.trim()) {
+    throw new apiError(400, "Username is missing");
+  }
+
+  // Aggregate pipeline to fetch user channel profile
+  const channel = await User.aggregate([
+    {
+      // Match the username (case-insensitive) in the users collection
+      $match: {
+        username: username.toLowerCase(),
+      },
+    },
+    {
+      // Lookup subscriptions where the user is the channel
+      $lookup: {
+        from: "subscription",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscriber",
+      },
+    },
+    {
+      // Lookup subscriptions where the user is the subscriber
+      $lookup: {
+        from: "subscription",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      // Add fields for subscriber count, channel subscriber count, and subscription status
+      $addFields: {
+        subscribercount: {
+          $size: "$subscriber",
+        },
+        channelsubscribercount: {
+          $size: "$subscribedTo",
+        },
+        isSubscribed: {
+          // Check if the current user is subscribed to this channel
+          $cond: {
+            if: { $in: [req.user?._id, "$subscriber.subscriber"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      // Project the required fields to include in the result
+      $project: {
+        fullname: 1,
+        username: 1,
+        subscribercount: 1,
+        channelsubscribercount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverimage: 1,
+        email: 1,
+      },
+    },
+  ]);
+
+  // Check if the channel exists
+  if (!channel.length) {
+    throw new apiError(400, "Channel does not exist");
+  }
+
+  // Send the channel profile in the response
+  return res.status(200).json(new apiResponse(200, channel[0], "User channel fetched successfully"));
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  // Aggregate pipeline to fetch watch history for the current user
+  const user = await User.aggregate([
+    {
+      // Match the current user by ID
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      // Lookup videos in the user's watch history
+      $lookup: {
+        from: "video",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            // Lookup the owner of each video
+            $lookup: {
+              from: "user",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                {
+                  // Project the required fields from the owner
+                  $project: {
+                    fullname: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            // Add owner field to each video in the watch history
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  // Send the watch history in the response
+  return res
+  .status(200)
+  .json(new apiResponse(200, user[0].watchHistory, "Watch history fetched successfully"));
+});
 
 export { registerUser,
    loginUser,
@@ -356,6 +528,9 @@ export { registerUser,
     refreshAccessToken,
     changeCurrentPassword,
     updateAccountDetails,
-    updateUserAvtar,
-    updateUserCoverImage 
+    updateUserAvatar,
+    updateUserCoverImage,
+    getCurrentUser,
+    getUserChannelProfile,
+    getWatchHistory
   };
