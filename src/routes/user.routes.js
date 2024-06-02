@@ -1,6 +1,17 @@
 import { Router } from "express";
-import { loginUser, logoutUser, registerUser,refreshAccessToken,changeCurrentPassword,updateAccountDetails,updateUserAvatar,
-updateUserCoverImage,getCurrentUser } from "../controllers/user.controller.js";
+import { 
+  loginUser,
+  logoutUser,
+  registerUser,
+  refreshAccessToken,
+  changeCurrentPassword,
+  updateAccountDetails,
+  updateUserAvatar,
+  updateUserCoverImage,
+  getCurrentUser,
+  getUserChannelProfile,
+  getWatchHistory
+} from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -24,24 +35,37 @@ router.route("/register").post(
   registerUser
 );
 
-router.route("/login").post(loginUser)
+// Define a POST route at '/login' to handle user login
+router.route("/login").post(loginUser);
 
-//secured routes 
+// Secured routes (require authentication)
 
+// Define a POST route at '/logout' to handle user logout
+router.route("/logout").post(verifyJWT, logoutUser);
 
-router.route("/logout").post(verifyJWT, logoutUser)
+// Define a POST route at '/refresh-token' to refresh access token
+router.route("/refresh-token").post(refreshAccessToken);
 
-router.route("/refresh-token").post(refreshAccessToken)
+// Define a POST route at '/changeCurrentPassword' to change user's password
+router.route("/changeCurrentPassword").post(verifyJWT, changeCurrentPassword);
 
-router.route("/changeCurrentPassword").post(changeCurrentPassword)
+// Define a PATCH route at '/updateAccountDetails' to update user's account details
+router.route("/updateAccountDetails").patch(verifyJWT, updateAccountDetails);
 
-router.route("/updateAccountDetails").post(updateAccountDetails)
+// Define a PATCH route at '/updateUserAvatar' to update user's avatar
+router.route("/updateUserAvatar").patch(verifyJWT, upload.single("avatar"), updateUserAvatar);
 
-router.route("/updateUserAvatar").post(updateUserAvatar)
+// Define a PATCH route at '/updateUserCoverImage' to update user's cover image
+router.route("/updateUserCoverImage").patch(verifyJWT, upload.single("coverimage"), updateUserCoverImage);
 
-router.route("/updateUserCoverImage").post(updateUserCoverImage)
+// Define a GET route at '/getCurrentUser' to get current user's information
+router.route("/getCurrentUser").get(verifyJWT, getCurrentUser);
 
-router.route("/getCurrentUser").post(getCurrentUser)
+// Define a GET route at '/c/:username' to get user channel profile by username
+router.route("/c/:username").get(verifyJWT, getUserChannelProfile);
+
+// Define a GET route at '/WatchHistory' to get user's watch history
+router.route("/WatchHistory").get(verifyJWT, getWatchHistory);
 
 // Export the router to be used in the main app
 export default router;
