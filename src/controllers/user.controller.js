@@ -261,7 +261,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   // Send the current user information in the response
   return res
     .status(200)
-    .json(200, res.user, "Current user fetched successfully");
+    .json(new apiResponse(200, res.user, "Current user fetched successfully"));
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
